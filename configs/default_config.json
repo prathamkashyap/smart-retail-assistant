@@ -1,0 +1,54 @@
+{
+    "model": {
+        "weights": "models/yolov8n.pt",
+        "confidence_threshold": 0.35,
+        "iou_threshold": 0.45
+    },
+    "target_classes": {
+        "person": 0,
+        "bottle": 39,
+        "cup": 41,
+        "handbag": 26,
+        "backpack": 24,
+        "umbrella": 25,
+        "cell phone": 67,
+        "book": 73,
+        "vase": 75,
+        "scissors": 76,
+        "toothbrush": 79
+    },
+    "product_classes": [39, 41, 26, 24, 25, 67, 73, 75, 76, 79],
+    "person_class": 0,
+    "shelf_zones": [
+        {
+            "zone_id": "shelf_A",
+            "label": "Shelf A (Left)",
+            "bbox": [50, 200, 300, 400],
+            "color": [0, 255, 0]
+        },
+        {
+            "zone_id": "shelf_B",
+            "label": "Shelf B (Center)",
+            "bbox": [320, 200, 570, 400],
+            "color": [255, 165, 0]
+        },
+        {
+            "zone_id": "shelf_C",
+            "label": "Shelf C (Right)",
+            "bbox": [590, 200, 840, 400],
+            "color": [0, 165, 255]
+        }
+    ],
+    "proximity_margin": 80,
+    "dwell_time_threshold_sec": 3.0,
+    "empty_zone_alert_sec": 10.0,
+    "repeated_attention_threshold": 3,
+    "stock_drop_ratio": 0.5,
+    "tracker_max_disappeared": 25,
+    "tracker_max_distance": 120,
+    "log_debounce_sec": 2.0,
+    "snapshot_on_events": true,
+    "video_source": 0,
+    "display_width": 960,
+    "display_height": 540
+}

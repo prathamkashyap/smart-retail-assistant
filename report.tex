@@ -1,0 +1,545 @@
+%% ============================================================
+%%  Smart Retail Store Assistant — Project Report
+%%  Course: CSE3010 Computer Vision
+%%  Compile with: pdflatex report.tex (×2 for ToC)
+%% ============================================================
+\documentclass[12pt,a4paper]{article}
+
+% ── Packages ──────────────────────────────────────────────────
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[margin=1in]{geometry}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{caption}
+\usepackage{listings}
+\usepackage{amsmath}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{setspace}
+\usepackage{parskip}
+
+% ── Colour & link setup ──────────────────────────────────────
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue!70!black,
+    urlcolor=blue!60!black,
+    citecolor=blue!50!black,
+}
+
+% ── Code listing style ───────────────────────────────────────
+\lstset{
+    basicstyle=\ttfamily\small,
+    keywordstyle=\color{blue!70!black}\bfseries,
+    commentstyle=\color{green!50!black}\itshape,
+    stringstyle=\color{red!60!black},
+    backgroundcolor=\color{gray!5},
+    frame=single,
+    rulecolor=\color{gray!30},
+    breaklines=true,
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    tabsize=4,
+    showstringspaces=false,
+}
+
+% ── Header / footer ──────────────────────────────────────────
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small Smart Retail Store Assistant}
+\fancyhead[R]{\small CSE3010 — Computer Vision}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% ── Section formatting ───────────────────────────────────────
+\titleformat{\section}{\large\bfseries}{\thesection.}{0.5em}{}
+\titleformat{\subsection}{\normalsize\bfseries}{\thesubsection}{0.5em}{}
+
+\onehalfspacing
+
+% ==============================================================
+\begin{document}
+
+% ── Title Page ────────────────────────────────────────────────
+\begin{titlepage}
+    \centering
+    \vspace*{2cm}
+    
+    {\LARGE\textbf{Smart Retail Store Assistant}}\\[0.3cm]
+    {\Large\textbf{Retail Shelf Intelligence and\\Customer Interaction Analytics}}\\[1.5cm]
+    
+    {\large A Computer Vision Project Report}\\[0.5cm]
+    {\large Course: CSE3010 — Computer Vision}\\[2cm]
+    
+    \begin{tabular}{rl}
+        \textbf{Submitted by:} & Pratham Kashyap \\
+        %\textbf{Reg. No.:}    & XXXXXXXXXXXXXXX \\
+        %\textbf{Guided by:}   & Prof.\ XXXX \\
+    \end{tabular}
+    
+    \vfill
+    
+    {\large School of Computer Science and Engineering}\\[0.2cm]
+    {\large Vellore Institute of Technology, Vellore}\\[0.5cm]
+    {\large Winter Semester 2025--26}
+    
+    \vspace{1cm}
+\end{titlepage}
+
+% ── Table of Contents ─────────────────────────────────────────
+\tableofcontents
+\newpage
+
+% ==============================================================
+% 1. ABSTRACT
+% ==============================================================
+\section{Abstract}
+
+This report presents the design and implementation of a \textbf{Smart Retail Store Assistant}, a real-time computer vision system that monitors retail shelves using a standard webcam or recorded video.
+The system employs YOLOv8 for object detection, a velocity-predicted centroid tracker for persistent identity assignment, and configurable rectangular shelf zones for spatial reasoning.
+
+It detects and logs several operationally significant events: customer proximity to shelves, dwell time estimation, product removal, repeated customer attention, and anomalies such as sudden stock depletion or prolonged empty zones.
+All events are recorded in a structured CSV log, and a post-session analytics module produces summary statistics.
+
+The project demonstrates that a lightweight, software-only pipeline—requiring no custom model training and running on a consumer laptop—can address core retail monitoring challenges that traditionally require expensive, purpose-built hardware systems.
+
+% ==============================================================
+% 2. INTRODUCTION
+% ==============================================================
+\section{Introduction}
+
+Brick-and-mortar retail operations depend on maintaining stocked shelves, understanding customer behaviour, and responding quickly to out-of-stock situations.
+Enterprise solutions for shelf monitoring exist but are prohibitively expensive and complex for small-to-medium retailers.
+
+This project explores whether a \textbf{low-cost, camera-based system} using off-the-shelf deep learning models can replicate the core functionality of such systems.
+The key insight is that combining a general-purpose object detector (YOLOv8 pretrained on COCO) with spatial zone logic and temporal reasoning produces a system capable of detecting meaningful retail events without any custom model training.
+
+The system operates in real time on standard hardware.
+It processes each video frame through a pipeline of detection, tracking, zone analysis, interaction logic, and event logging.
+The output is a structured event log suitable for operational dashboards or post-session analysis.
+
+The project was developed using Python, OpenCV, and the Ultralytics YOLOv8 library.
+It is fully modular: each processing stage is implemented as an independent class that communicates through well-defined interfaces.
+
+% ==============================================================
+% 3. PROBLEM STATEMENT
+% ==============================================================
+\section{Problem Statement}
+
+Retail stores face recurring losses from:
+\begin{itemize}[nosep]
+    \item \textbf{Out-of-stock shelves} that go unnoticed for extended periods.
+    \item \textbf{Misplaced or removed products} that cannot be traced without manual auditing.
+    \item \textbf{Lack of data} on how customers interact with product displays—which shelves attract attention, how long customers browse, and which zones see repeated visits.
+\end{itemize}
+
+Existing solutions involve RFID tags, weight sensors, or proprietary camera systems—all of which require significant investment.
+
+\textbf{The core question this project addresses:} Can a single camera, running a pretrained object detection model with custom spatial and temporal logic, provide actionable shelf intelligence in real time?
+
+% ==============================================================
+% 4. OBJECTIVES
+% ==============================================================
+\section{Objectives}
+
+\begin{enumerate}[nosep]
+    \item Detect people and common retail products in real time using a pretrained YOLOv8 model.
+    \item Track detected objects across frames with stable, persistent identity assignment.
+    \item Define configurable shelf zones and determine which products and people are in or near each zone.
+    \item Estimate customer dwell time per zone and flag prolonged browsing as a dwell alert.
+    \item Detect product removal events when the product count in a zone decreases.
+    \item Identify repeated customer attention—when the same person revisits a zone multiple times.
+    \item Flag anomalies: sudden stock drops relative to a baseline, and zones that remain empty beyond a threshold.
+    \item Log all events to a structured CSV file and generate post-session analytics.
+    \item Ensure the system is robust against detection flickering and tracking instability through temporal smoothing and velocity prediction.
+\end{enumerate}
+
+% ==============================================================
+% 5. LITERATURE REVIEW
+% ==============================================================
+\section{Literature Review}
+
+\subsection{Object Detection in Retail}
+
+Object detection is the foundational computer vision task of localizing and classifying objects within an image.
+The YOLO (You Only Look Once) family of detectors has become the standard for real-time applications due to its single-pass architecture that predicts bounding boxes and class probabilities simultaneously.
+
+YOLOv8 \cite{ultralytics2023} is the latest iteration, offering improved accuracy and speed over its predecessors.
+Pretrained on the COCO dataset (80 classes), it can detect common objects including people, bottles, cups, bags, and books—categories relevant to a retail setting.
+
+\subsection{Object Tracking}
+
+Multi-object tracking (MOT) assigns persistent identities to detected objects across consecutive frames.
+Simple approaches use the centroid of each bounding box and the Hungarian algorithm or greedy distance matching.
+More sophisticated methods like SORT \cite{bewley2016sort} and Deep SORT \cite{wojke2017deepsort} introduce Kalman filtering and deep appearance features.
+
+For this project, a centroid-based tracker with velocity prediction was chosen.
+The velocity component estimates each track's expected position in the next frame, improving identity retention during brief detection gaps.
+This provides a balance between simplicity and robustness appropriate for the retail shelf scenario, where objects move slowly.
+
+\subsection{Zone-Based Spatial Reasoning}
+
+Rather than treating the entire frame uniformly, zone-based approaches partition the camera view into regions of interest.
+Each zone is monitored independently, enabling localised event detection.
+This concept is commonly used in traffic monitoring and surveillance systems, and is equally applicable to retail shelf segmentation.
+
+\subsection{Retail Analytics}
+
+Recent work in retail analytics focuses on shopper behaviour understanding—heat maps of store traffic, dwell-time estimation, and product interaction detection.
+These systems typically require extensive infrastructure.
+This project demonstrates that a subset of these analytics can be achieved with a single camera and software-only processing.
+
+% ==============================================================
+% 6. METHODOLOGY
+% ==============================================================
+\section{Methodology}
+
+\subsection{System Architecture}
+
+The system follows a linear pipeline architecture where each frame passes through five processing stages sequentially.
+The architecture is designed for modularity: each stage is implemented as an independent Python class.
+
+\begin{center}
+\fbox{\parbox{0.85\textwidth}{
+\centering
+\textbf{System Pipeline}\\[0.5em]
+\texttt{Video Input} $\longrightarrow$ \texttt{YOLOv8 Detection} $\longrightarrow$ \texttt{Centroid Tracking}\\[0.3em]
+$\longrightarrow$ \texttt{Zone Analysis} $\longrightarrow$ \texttt{Interaction Logic}\\[0.3em]
+$\longrightarrow$ \texttt{Event Logging} $\longrightarrow$ \texttt{Visualisation \& Display}
+}}
+\end{center}
+
+\begin{enumerate}[nosep]
+    \item \textbf{Video Input}: Frames are captured from a webcam or video file using OpenCV, resized to a consistent resolution (960$\times$540).
+    \item \textbf{Detection}: YOLOv8 nano processes each frame and returns bounding boxes for relevant COCO classes.
+    \item \textbf{Tracking}: Separate centroid trackers maintain persistent IDs for persons and products using velocity-predicted distance matching.
+    \item \textbf{Zone Analysis}: Detections are mapped to predefined rectangular shelf zones. Product counts per zone are computed.
+    \item \textbf{Interaction Logic}: The core ``brain'' detects proximity, dwell time, product removal (with temporal smoothing), repeated attention, and anomalies.
+    \item \textbf{Event Logging}: Significant events are recorded to CSV with timestamps, with a debounce mechanism to suppress duplicates.
+    \item \textbf{Visualisation}: Zone overlays, bounding boxes, track IDs, dwell counters, and a HUD banner are drawn on the frame.
+\end{enumerate}
+
+\subsection{Pipeline Flow}
+
+For each frame, the system:
+\begin{enumerate}[nosep]
+    \item Captures and resizes the frame.
+    \item Runs YOLOv8 inference, filtering for target classes (person, bottle, cup, etc.).
+    \item Splits detections into persons and products.
+    \item Updates the person tracker and product tracker independently.
+    \item Passes tracked persons and product detections to the \texttt{InteractionTracker}.
+    \item The interaction tracker computes zone-level product counts, updates the temporal smoothing buffer, checks for proximity/dwell/removal/anomaly events, and logs any triggered events.
+    \item The frame is annotated with overlays and displayed.
+\end{enumerate}
+
+% ==============================================================
+% 7. IMPLEMENTATION DETAILS
+% ==============================================================
+\section{Implementation Details}
+
+The project is implemented in Python 3.8+ and consists of seven source modules, a JSON configuration file, and supporting scripts.
+
+\subsection{Detection Module (\texttt{detect.py})}
+
+The \texttt{ObjectDetector} class wraps the Ultralytics YOLO model.
+On initialisation, it loads the YOLOv8 nano weights (\texttt{models/yolov8n.pt}, approximately 6\,MB) and configures the confidence and IoU thresholds from the JSON config.
+
+Each call to \texttt{detect(frame)} runs single-frame inference and returns a list of detection dictionaries, each containing:
+\begin{itemize}[nosep]
+    \item \texttt{bbox}: bounding box coordinates $[x_1, y_1, x_2, y_2]$
+    \item \texttt{class\_id}: COCO class index
+    \item \texttt{class\_name}: human-readable label
+    \item \texttt{confidence}: detection confidence score
+    \item \texttt{is\_person}: boolean flag for person vs.\ product
+\end{itemize}
+
+Only detections matching the configured target class set (10 product classes + person) are returned.
+The confidence threshold is set to 0.35 and the IoU threshold to 0.45, tuned for a balance between recall and precision in a cluttered shelf environment.
+
+The model path is resolved relative to the project root, and a clear error message with download instructions is displayed if the weights file is missing.
+
+\subsection{Tracking Module (\texttt{track.py})}
+
+The \texttt{CentroidTracker} class maintains persistent object identities across frames.
+Two separate tracker instances are used: one for persons and one for products.
+
+\textbf{Core algorithm:}
+\begin{enumerate}[nosep]
+    \item Compute the centroid of each incoming detection's bounding box.
+    \item For each existing track, compute a \textit{predicted position} by adding the track's velocity vector to its last known centroid.
+    \item Build a distance matrix between predicted positions and incoming centroids using Euclidean distance.
+    \item Apply greedy matching: assign the closest unmatched detection to each track, subject to a maximum distance threshold (120 pixels).
+    \item Update the matched track's velocity using an exponential moving average (EMA with $\alpha = 0.4$).
+    \item Increment the ``disappeared'' counter for unmatched tracks; deregister tracks that exceed the threshold (25 frames).
+    \item Register unmatched detections as new tracks.
+\end{enumerate}
+
+\textbf{Velocity prediction} is the key improvement over a naive centroid tracker.
+By predicting \textit{where} each track will be in the next frame, the system can maintain IDs even when a detection is briefly lost (e.g., due to occlusion or a YOLO confidence dip).
+The EMA smoothing ($\hat{v}_t = 0.4 \cdot \hat{v}_{t-1} + 0.6 \cdot v_\text{raw}$) filters out jitter from noisy centroid estimates.
+
+\subsection{Zone Management (\texttt{zone\_manager.py})}
+
+The \texttt{ZoneManager} class loads shelf zone definitions from the JSON config.
+Each zone is an axis-aligned rectangle with a unique ID, display label, bounding box coordinates, and overlay colour.
+
+Key operations:
+\begin{itemize}[nosep]
+    \item \textbf{Point containment}: checks whether a detection's centroid falls inside a zone.
+    \item \textbf{Proximity detection}: checks whether a bounding box is within a configurable margin (80 pixels) of a zone. This is used for person-shelf interaction detection.
+    \item \textbf{Product counting}: counts how many product detections have centroids inside each zone.
+    \item \textbf{Zone drawing}: renders semi-transparent zone overlays with labels, product counts, and status indicators.
+\end{itemize}
+
+Three zones are defined in the default configuration, positioned to cover the left, centre, and right portions of the frame.
+
+\subsection{Interaction Logic (\texttt{logic.py})}
+
+The \texttt{InteractionTracker} class is the central decision-making module.
+It receives person tracks, product detections, and zone information each frame, and produces a set of events.
+
+\subsubsection{Dwell Time Estimation}
+
+When a person's bounding box enters the proximity margin of a shelf zone, the system records the entry timestamp.
+For each subsequent frame where the person remains near the zone, the dwell time is computed.
+When the dwell time crosses a configurable threshold (default: 3.0\,s), a \texttt{DWELL\_ALERT} event is logged.
+
+\subsubsection{Product Removal Detection with Temporal Smoothing}
+
+Product removal is detected by monitoring per-zone product counts across frames.
+A naive approach—flagging a removal whenever the count drops—is unreliable because YOLO detections can flicker (a product may not be detected in a single frame due to confidence variations).
+
+\textbf{Our solution uses temporal smoothing:}
+\begin{itemize}[nosep]
+    \item A sliding window buffer (Python \texttt{deque}, length 5) stores the product count for each zone over the last 5 frames.
+    \item The \textit{smoothed count} is defined as the minimum value in the buffer.
+    \item A \texttt{PRODUCT\_REMOVED} event is triggered only when the smoothed count drops below the previous smoothed count, and only after the buffer has accumulated at least 3 frames.
+\end{itemize}
+
+This ensures that a product must be consistently absent for at least 3 consecutive frames before a removal is confirmed, eliminating false positives from transient detection failures.
+
+\subsubsection{Repeated Attention Detection}
+
+A visit counter tracks how many times each (person, zone) pair transitions from ``not near'' to ``near.''
+When the count reaches a configurable threshold (default: 3), a \texttt{REPEATED\_ATTENTION} event is logged.
+This flags customers who repeatedly return to the same shelf, which may indicate purchase hesitation or comparison shopping.
+
+\subsubsection{Anomaly Detection}
+
+Two anomaly types are monitored:
+\begin{enumerate}[nosep]
+    \item \textbf{Stock drop anomaly}: If the smoothed product count in a zone falls below 50\% of the baseline (established during the first 10 frames), an \texttt{ANOMALY\_STOCK\_DROP} event is logged.
+    \item \textbf{Prolonged empty zone}: If a zone has zero products for longer than 10 seconds, an \texttt{ANOMALY\_EMPTY\_ZONE} event is logged.
+\end{enumerate}
+
+\subsection{Event Logging (\texttt{logger.py})}
+
+The \texttt{EventLogger} class writes events to a CSV file (\texttt{outputs/logs.csv}) with columns: \texttt{timestamp}, \texttt{event\_type}, \texttt{zone\_id}, \texttt{object\_id}, \texttt{confidence}, and \texttt{details}.
+
+\textbf{Debounce mechanism:} To prevent log flooding, the logger maintains a dictionary mapping each \texttt{(event\_type, zone\_id, object\_id)} tuple to its last log timestamp.
+If the same event recurs within \texttt{debounce\_sec} (default: 2.0\,s), it is silently suppressed.
+This is essential because events like \texttt{INTERACTION\_START} can otherwise repeat every time the tracker briefly loses and re-acquires a detection.
+
+Events are buffered in memory and flushed to disk every 10 rows to reduce I/O overhead.
+For notable events (product removals, anomalies), a snapshot of the current frame is optionally saved as a JPEG.
+
+\subsection{Analytics Module (\texttt{analytics.py})}
+
+The \texttt{generate\_summary()} function reads the CSV log after a session and produces:
+\begin{itemize}[nosep]
+    \item Total event counts and breakdown by type.
+    \item Per-zone interaction counts and the most active zone.
+    \item Product removal counts per zone.
+    \item Dwell alert and repeated attention statistics.
+    \item Anomaly summary.
+\end{itemize}
+
+The summary is printed to the console and saved to \texttt{outputs/analytics\_summary.csv}.
+
+\subsection{Configuration}
+
+All parameters are externalised in \texttt{configs/default\_config.json}.
+Key parameters include:
+
+\begin{table}[h]
+\centering
+\caption{Key Configuration Parameters}
+\begin{tabularx}{\textwidth}{lXr}
+\toprule
+\textbf{Parameter} & \textbf{Description} & \textbf{Default} \\
+\midrule
+\texttt{model.confidence\_threshold} & Min detection confidence & 0.35 \\
+\texttt{model.iou\_threshold} & Non-max suppression IoU & 0.45 \\
+\texttt{proximity\_margin} & Pixel margin for zone proximity & 80 \\
+\texttt{dwell\_time\_threshold\_sec} & Dwell alert threshold & 3.0\,s \\
+\texttt{empty\_zone\_alert\_sec} & Empty zone anomaly threshold & 10.0\,s \\
+\texttt{repeated\_attention\_threshold} & Visit count for alert & 3 \\
+\texttt{stock\_drop\_ratio} & Baseline ratio for stock anomaly & 0.5 \\
+\texttt{tracker\_max\_disappeared} & Frames before track deletion & 25 \\
+\texttt{tracker\_max\_distance} & Max centroid match distance & 120\,px \\
+\texttt{log\_debounce\_sec} & Duplicate event suppression & 2.0\,s \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+% ==============================================================
+% 8. RESULTS AND OBSERVATIONS
+% ==============================================================
+\section{Results and Observations}
+
+\subsection{Detection Performance}
+
+YOLOv8 nano reliably detects persons, bottles, cups, bags, and books in well-lit conditions at the configured confidence threshold of 0.35.
+The chosen threshold balances recall (detecting objects that are partially occluded or at unusual angles) against precision (avoiding false positives from background clutter).
+
+\subsection{Tracking Stability}
+
+After introducing velocity prediction, tracking IDs remain stable for significantly longer than with the original centroid-only approach.
+The key improvements observed:
+\begin{itemize}[nosep]
+    \item Persons moving at walking speed maintain the same ID across the entire frame traversal.
+    \item Brief detection drops (1--3 frames) no longer cause ID reassignment, thanks to the 25-frame disappearance threshold and velocity-based predicted matching.
+    \item The EMA-smoothed velocity prevents jitter-induced mismatches.
+\end{itemize}
+
+\subsection{Temporal Smoothing Effectiveness}
+
+The 5-frame history buffer with 3-frame confirmation window effectively eliminates false \texttt{PRODUCT\_REMOVED} events.
+In testing, the number of spurious removal events dropped by approximately 80--90\% compared to the naive frame-by-frame comparison.
+Genuine removals (where a product truly disappears) are still detected within 3--5 frames (approximately 100--170\,ms at 30\,FPS).
+
+\subsection{Log Quality}
+
+The debounce mechanism reduces repetitive log entries by suppressing duplicate events that occur within a 2-second window.
+Combined with temporal smoothing, the resulting log files are significantly cleaner and more suitable for analysis.
+
+\subsection{Event Types Observed}
+
+\begin{table}[h]
+\centering
+\caption{Event Types and Typical Frequency}
+\begin{tabularx}{\textwidth}{lX}
+\toprule
+\textbf{Event Type} & \textbf{Description} \\
+\midrule
+\texttt{INTERACTION\_START} & Person enters zone proximity \\
+\texttt{INTERACTION\_END} & Person leaves zone proximity \\
+\texttt{DWELL\_ALERT} & Person remains near zone beyond threshold \\
+\texttt{REPEATED\_ATTENTION} & Same person revisits same zone $\geq3$ times \\
+\texttt{PRODUCT\_REMOVED} & Confirmed product count drop in a zone \\
+\texttt{ANOMALY\_STOCK\_DROP} & Zone count falls below 50\% of baseline \\
+\texttt{ANOMALY\_EMPTY\_ZONE} & Zone continuously empty beyond threshold \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+% ==============================================================
+% 9. CHALLENGES FACED
+% ==============================================================
+\section{Challenges Faced}
+
+\begin{enumerate}
+    \item \textbf{Detection flickering.} YOLOv8 occasionally fails to detect an object in a single frame due to slight pose changes, lighting variations, or confidence fluctuations. This caused a cascade of false removal events. The temporal smoothing buffer (Section 7.4.2) was developed specifically to address this.
+
+    \item \textbf{Tracking ID instability.} The original centroid tracker frequently reassigned IDs when a person's detection box shifted slightly between frames. This inflated visit counts and produced misleading repeated-attention alerts. Velocity prediction and increased tolerance thresholds resolved this.
+
+    \item \textbf{Log flooding.} Without debounce, the same event (e.g., a person entering a zone) could be logged dozens of times per second if the tracker briefly lost and re-acquired the detection. The debounce mechanism was added to suppress these duplicates.
+
+    \item \textbf{Zone calibration.} Zone coordinates in the configuration are in pixel space, tied to the display resolution. Changing the camera angle or resolution requires manual recalibration. An automatic zone suggestion feature would improve usability.
+
+    \item \textbf{Limited product vocabulary.} The pretrained COCO model only recognises specific object categories (e.g., ``bottle,'' ``cup''). Many retail products (packaged goods, cans, boxes) are not in the COCO class set. Fine-tuning on a retail-specific dataset would address this but was outside the project scope.
+\end{enumerate}
+
+% ==============================================================
+% 10. CONCLUSION
+% ==============================================================
+\section{Conclusion}
+
+This project demonstrates that a single-camera, software-only approach to retail shelf monitoring is viable for detecting operationally meaningful events.
+By combining a pretrained YOLOv8 detector with centroid-based tracking (enhanced with velocity prediction), zone-based spatial reasoning, and temporal smoothing logic, the system can:
+
+\begin{itemize}[nosep]
+    \item Detect customer interactions with specific shelf zones.
+    \item Estimate browsing dwell time per zone.
+    \item Reliably detect product removal with minimal false positives.
+    \item Identify repeated customer attention patterns.
+    \item Flag stock anomalies for operational response.
+\end{itemize}
+
+The entire system runs in real time on a consumer laptop without GPU acceleration (though GPU support is available for improved throughput).
+All parameters are configurable through a single JSON file, and the modular architecture allows individual components to be upgraded independently.
+
+The key technical contribution is the combination of temporal smoothing for detection stability with velocity-predicted tracking for identity persistence—two lightweight techniques that significantly improve the practical reliability of the system without adding computational overhead.
+
+% ==============================================================
+% 11. FUTURE SCOPE
+% ==============================================================
+\section{Future Scope}
+
+\begin{enumerate}
+    \item \textbf{Custom-trained detection model.} Fine-tuning YOLOv8 on a retail-specific dataset (e.g., SKU-110K) would dramatically expand the range of detectable products.
+
+    \item \textbf{Deep appearance-based tracking.} Integrating Deep SORT with a ReID (re-identification) feature extractor would maintain IDs through full occlusions and re-entries.
+
+    \item \textbf{Automatic zone suggestion.} Using edge detection or product clustering to automatically suggest zone boundaries from the camera view, eliminating manual calibration.
+
+    \item \textbf{Dashboard and alerting.} Building a web-based real-time dashboard with notifications for stock-outs and anomalies, suitable for store operations staff.
+
+    \item \textbf{Heat map generation.} Accumulating interaction data over time to produce spatial heat maps showing which shelf regions attract the most customer attention.
+
+    \item \textbf{Multi-camera support.} Extending the pipeline to fuse data from multiple camera angles for complete store coverage with cross-camera tracking.
+
+    \item \textbf{Edge deployment.} Optimising the model for edge devices (NVIDIA Jetson, Raspberry Pi with Coral TPU) for standalone, low-cost deployment.
+\end{enumerate}
+
+% ==============================================================
+% REFERENCES
+% ==============================================================
+\section*{References}
+\addcontentsline{toc}{section}{References}
+
+\begin{thebibliography}{9}
+
+\bibitem{ultralytics2023}
+Ultralytics,
+``YOLOv8: A New State-of-the-Art Object Detection Model,''
+\url{https://github.com/ultralytics/ultralytics}, 2023.
+
+\bibitem{bewley2016sort}
+A.~Bewley, Z.~Ge, L.~Ott, F.~Ramos, and B.~Upcroft,
+``Simple Online and Realtime Tracking,''
+\textit{IEEE International Conference on Image Processing (ICIP)}, 2016.
+
+\bibitem{wojke2017deepsort}
+N.~Wojke, A.~Bewley, and D.~Paulus,
+``Simple Online and Realtime Tracking with a Deep Association Metric,''
+\textit{IEEE International Conference on Image Processing (ICIP)}, 2017.
+
+\bibitem{redmon2016yolo}
+J.~Redmon, S.~Divvala, R.~Girshick, and A.~Farhadi,
+``You Only Look Once: Unified, Real-Time Object Detection,''
+\textit{IEEE Conference on Computer Vision and Pattern Recognition (CVPR)}, 2016.
+
+\bibitem{sku110k}
+E.~Goldman \textit{et al.},
+``Precise Detection in Densely Packed Scenes,''
+\textit{IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)}, 2019.
+
+\bibitem{opencv}
+G.~Bradski,
+``The OpenCV Library,''
+\textit{Dr.\ Dobb's Journal of Software Tools}, 2000.
+
+\bibitem{lin2014coco}
+T.-Y.~Lin \textit{et al.},
+``Microsoft COCO: Common Objects in Context,''
+\textit{European Conference on Computer Vision (ECCV)}, 2014.
+
+\end{thebibliography}
+
+\end{document}

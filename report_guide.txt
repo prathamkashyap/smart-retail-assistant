@@ -1,0 +1,336 @@
+================================================================================
+  REPORT GUIDE
+  Retail Shelf Intelligence and Customer Interaction Analytics
+  using Computer Vision
+================================================================================
+
+This document provides a structured outline and content guide for writing the
+project report. Each section includes the key points to cover and suggestions
+for what to write. This is not the final report itself -- it is meant to be
+expanded into a full document.
+
+
+--------------------------------------------------------------------------------
+1. INTRODUCTION
+--------------------------------------------------------------------------------
+
+Start with the broader context of computer vision in retail. Mention how
+physical retail stores are adopting technology to compete with e-commerce.
+Camera-based monitoring is one of the more accessible approaches because it
+uses existing infrastructure (security cameras) and does not require expensive
+hardware like RFID tags on every product.
+
+Then narrow down to what this project does: a lightweight system that uses a
+single camera and a pretrained object detection model to track shelf activity,
+customer interactions, and basic anomalies in real time.
+
+Key points to cover:
+- Growth of computer vision applications in retail
+- The gap between expensive enterprise solutions and accessible student-level
+  implementations
+- What this project demonstrates: zone-based shelf monitoring, interaction
+  logging, and anomaly detection without custom model training
+
+
+--------------------------------------------------------------------------------
+2. PROBLEM STATEMENT
+--------------------------------------------------------------------------------
+
+Retail stores face several recurring operational problems that are difficult to
+monitor manually:
+
+- Out-of-stock or empty shelf regions that go unnoticed for hours
+- Products removed by customers and not returned, leading to misplacement
+- Lack of data on customer behaviour near specific shelves or product displays
+- No automated way to flag suspicious or unusual patterns (e.g. a sudden drop
+  in stock on a particular shelf)
+
+Manual monitoring by store staff is expensive, inconsistent, and does not scale.
+Existing automated solutions are often too costly or too complex for smaller
+retailers.
+
+This project addresses the problem by building a camera-based system that can
+detect and log these events automatically using only a webcam and open-source
+software.
+
+
+--------------------------------------------------------------------------------
+3. OBJECTIVES
+--------------------------------------------------------------------------------
+
+List the specific technical objectives of the project:
+
+1. Detect persons and common retail products in a live camera feed using a
+   pretrained YOLOv8 model.
+2. Track detected objects across frames using a centroid-based tracker
+   to maintain identity over time.
+3. Define configurable shelf zones and monitor product presence within each
+   zone independently.
+4. Detect customer proximity to shelf zones and estimate dwell time.
+5. Identify product removal events (product count drops in a zone).
+6. Detect basic anomalies: sudden stock drops, prolonged empty zones, and
+   repeated customer attention without product return.
+7. Log all events to a structured CSV file for post-session analysis.
+8. Generate summary analytics (total interactions, removals, most active zone,
+   dwell statistics).
+
+
+--------------------------------------------------------------------------------
+4. WHY THIS PROBLEM MATTERS IN RETAIL OPERATIONS
+--------------------------------------------------------------------------------
+
+Discuss the real-world impact:
+
+- Out-of-stock situations are estimated to cost retailers billions in lost
+  sales annually. Even a few hours of an empty shelf for a popular product
+  can result in measurable revenue loss.
+- Understanding customer dwell time and interaction patterns helps stores
+  optimise product placement and shelf layout.
+- Automated anomaly detection can alert staff to potential theft, accidental
+  misplacement, or supply chain issues before they escalate.
+- Data-driven retail is becoming the norm. Even simple analytics (which shelf
+  gets the most traffic, which products get picked up and put back) provide
+  value to store managers.
+
+This project does not claim to solve all of these problems at production scale,
+but it demonstrates the core mechanics that underpin commercial retail
+intelligence systems.
+
+
+--------------------------------------------------------------------------------
+5. METHODOLOGY
+--------------------------------------------------------------------------------
+
+Describe the overall approach in stages:
+
+A. Input Acquisition
+   - Frames are captured from a webcam or a pre-recorded video file using
+     OpenCV's VideoCapture.
+
+B. Object detection
+   - Each frame is passed through a YOLOv8 nano model (pretrained on COCO).
+   - Detections are filtered to keep only retail-relevant classes:
+     person, bottle, cup, handbag, backpack, etc.
+   - Each detection includes a bounding box, class label, and confidence score.
+
+C. Object Tracking
+   - A centroid-based tracker assigns persistent IDs to detected objects.
+   - It uses Euclidean distance matching between centroids in consecutive frames.
+   - Objects that disappear for more than a configurable number of frames are
+     deregistered.
+
+D. Shelf Zone Management
+   - Shelf regions are defined as axis-aligned rectangles in a configuration
+     file.
+   - For each frame, the system counts how many product detections fall inside
+     each zone.
+   - Proximity checks determine if a person is near (within a margin of) a zone.
+
+E. Interaction and Anomaly Logic
+   - When a person's bounding box is near a zone, an interaction is started and
+     the dwell timer begins.
+   - Product counts per zone are compared frame-to-frame to detect removals.
+   - A baseline product count is established from early frames and used to
+     detect sudden stock drops.
+   - Zones that remain empty beyond a threshold trigger an anomaly alert.
+   - Repeated visits by the same person to the same zone are counted and
+     flagged.
+
+F. Logging and Analytics
+   - Every event is appended to a CSV log with a timestamp, event type, zone
+     ID, object ID, and descriptive text.
+   - At the end of a session, the log is read back and summarised into
+     aggregate statistics.
+
+
+--------------------------------------------------------------------------------
+6. SYSTEM ARCHITECTURE
+--------------------------------------------------------------------------------
+
+Text-based block diagram:
+
+    +------------------+
+    |  Video Input     |
+    |  (Webcam/File)   |
+    +--------+---------+
+             |
+             v
+    +------------------+
+    |  Frame Capture   |
+    |  (OpenCV)        |
+    +--------+---------+
+             |
+             v
+    +------------------+
+    |  Object Detection|
+    |  (YOLOv8)        |
+    +--------+---------+
+             |
+     +-------+-------+
+     |               |
+     v               v
+  +--------+   +-----------+
+  | Person |   | Product   |
+  | Tracks |   | Tracks    |
+  +--------+   +-----------+
+     |               |
+     v               v
+  +--------------------------+
+  |  Zone Manager            |
+  |  - proximity check       |
+  |  - product count per zone|
+  +--------------------------+
+             |
+             v
+  +--------------------------+
+  |  Interaction Logic       |
+  |  - dwell time            |
+  |  - removal detection     |
+  |  - repeated attention    |
+  |  - anomaly checks        |
+  +-------------+------------+
+                |
+        +-------+-------+
+        |               |
+        v               v
+  +-----------+   +-----------+
+  | Event     |   | Display   |
+  | Logger    |   | Overlay   |
+  | (CSV)     |   | (OpenCV)  |
+  +-----------+   +-----------+
+        |
+        v
+  +-----------+
+  | Analytics |
+  | Summary   |
+  +-----------+
+
+
+--------------------------------------------------------------------------------
+7. TOOLS AND TECHNOLOGIES
+--------------------------------------------------------------------------------
+
+- Python 3.8+: primary language
+- OpenCV (cv2): frame capture, image manipulation, display
+- Ultralytics YOLOv8: object detection using the pretrained yolov8n model
+- NumPy: numerical operations
+- SciPy: distance calculations for the centroid tracker
+- Pandas: structured data handling for event logging and analytics
+- JSON: configuration file format
+
+
+--------------------------------------------------------------------------------
+8. MODULE-WISE EXPLANATION
+--------------------------------------------------------------------------------
+
+detect.py
+- Loads the YOLOv8 model once at startup.
+- Runs inference on each frame and returns a filtered list of detections.
+- Provides a drawing function that overlays bounding boxes and labels.
+
+track.py
+- Implements a CentroidTracker class.
+- Maintains an ordered dictionary of tracked objects with unique IDs.
+- Uses a distance matrix (scipy.spatial.distance.cdist) for matching.
+- Handles registration, deregistration, and disappearance counting.
+
+zone_manager.py
+- Defines ShelfZone objects from config data.
+- Provides spatial queries: containment, overlap, and proximity checks.
+- Draws semi-transparent zone overlays with labels and status indicators.
+
+logic.py
+- InteractionTracker class that maintains per-person, per-zone state.
+- Tracks interaction start/end, dwell time, visit counts, and anomalies.
+- Compares current product counts against previous frame and baseline.
+- Returns a status dictionary used for on-screen display and logging.
+
+logger.py
+- EventLogger class that buffers event rows and periodically flushes to CSV.
+- Supports saving frame snapshots for notable events (removals, anomalies).
+
+analytics.py
+- Reads the CSV log and computes summary statistics.
+- Outputs to console and to a summary CSV file.
+- Can be run standalone after a session.
+
+main.py
+- Entry point; parses command-line arguments.
+- Initialises all modules and enters the frame-processing loop.
+- Draws overlays (zones, detections, dwell labels, counters) on each frame.
+- On exit, finalises the logger and generates the analytics summary.
+
+
+--------------------------------------------------------------------------------
+9. CHALLENGES
+--------------------------------------------------------------------------------
+
+Discuss practical challenges encountered or expected:
+
+- Zone coordinate calibration: the shelf zones must be manually adjusted to
+  match each camera's field of view. There is no automatic calibration.
+- Detection limitations: the pretrained COCO model does not cover many
+  retail product categories. Small or tightly packed items may not be detected.
+- Tracking with occlusion: the centroid tracker loses identity when objects are
+  heavily occluded or move quickly. More advanced trackers (SORT, Deep SORT)
+  would improve this.
+- Lighting and background variation: detection confidence drops in poor
+  lighting conditions or cluttered backgrounds.
+- Frame rate vs. accuracy trade-off: running YOLO on every frame at high
+  resolution is slow on CPU. The system uses a small model (yolov8n) and
+  resized frames to stay responsive.
+
+
+--------------------------------------------------------------------------------
+10. LIMITATIONS
+--------------------------------------------------------------------------------
+
+- The system assumes a fixed camera angle viewing the shelf front-on.
+  Oblique angles will distort zone coordinates.
+- Only COCO-class objects are detected. A real deployment would need a
+  fine-tuned model for specific product SKUs.
+- The centroid tracker is not robust to crowded scenes with many people.
+- Anomaly detection is rule-based (thresholds). There is no learning of
+  normal vs. abnormal patterns.
+- The system does not distinguish between a product being purchased (taken
+  away) and merely picked up and examined.
+
+
+--------------------------------------------------------------------------------
+11. FUTURE SCOPE
+--------------------------------------------------------------------------------
+
+- Integrate a more robust tracker (Deep SORT with appearance features).
+- Fine-tune YOLOv8 on a retail-specific dataset for better product recognition.
+- Add a web dashboard for remote monitoring with historical charts.
+- Use pose estimation to classify customer actions (reaching, browsing,
+  picking up).
+- Implement multi-camera support for covering larger store areas.
+- Apply learned anomaly detection models instead of fixed thresholds.
+- Add barcode or QR code reading for product identification.
+- Deploy on edge devices (Jetson Nano, Raspberry Pi with Coral TPU).
+
+
+--------------------------------------------------------------------------------
+12. CONCLUSION
+--------------------------------------------------------------------------------
+
+This project demonstrates a practical, end-to-end pipeline for retail shelf
+monitoring using computer vision. By combining pretrained object detection,
+simple spatial logic, and structured event logging, the system addresses
+several real-world retail problems -- out-of-stock detection, customer
+interaction analysis, and basic anomaly flagging -- without requiring custom
+model training or expensive hardware.
+
+While the system has clear limitations (fixed camera, COCO-class-only
+detection, rule-based anomalies), it establishes a foundation that could be
+extended into a more capable retail intelligence tool with additional
+engineering effort.
+
+The project is suitable for academic demonstration and provides a starting
+point for further research into vision-based retail analytics.
+
+
+================================================================================
+  END OF REPORT GUIDE
+================================================================================

@@ -37,12 +37,12 @@ The system follows a linear pipeline where each video frame passes through five 
                                                │
                     ┌──────────────┐    ┌───────▼──────┐
                     │    Event     │◀───│  Interaction │
-                    │   Logging   │    │    Logic     │
+                    │   Logging    │    │    Logic     │
                     └──────┬───────┘    └──────┬───────┘
                            │                   │
                     ┌──────▼───────┐    ┌──────▼───────┐
                     │   Analytics  │    │ Zone Analysis│
-                    │   Summary   │    │ & Visualise  │
+                    │   Summary    │    │ & Visualise  │
                     └──────────────┘    └──────────────┘
 ```
 

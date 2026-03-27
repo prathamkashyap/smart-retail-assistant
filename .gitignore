@@ -4,3 +4,4 @@ __pycache__/
 outputs/logs.csv
 outputs/analytics_summary.csv
 outputs/snapshots/
+.DS_Store
